@@ -115,13 +115,13 @@ typedef struct {
  * @brief 初始化数据库连接
  * @return SUCCESS 成功, ERR_DB 失败
  */
-int db_init();
+int db_init(MYSQL *mysql);
 
 /**
  * @brief 关闭数据库连接
  * @return SUCCESS 成功, ERR_DB 失败
  */
-int db_close();
+int db_close(MYSQL *mysql);
 /** @} */
 
 /**
@@ -255,7 +255,7 @@ char* compute_sha1(const char* data, size_t len);
  * @param result 查询结果（需根据具体实现定义）
  * @return SUCCESS 成功, ERR_DB 失败
  */
-int db_query(const char* sql, void* result);
+int db_query(MYSQL *mysql,const char* sql, void* result);
 /** @} */
 /**
  * @defgroup error_handling 错误处理

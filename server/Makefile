@@ -1,29 +1,34 @@
-# 设置编译器
-CC := gcc
-CFLAGS := -D_GUN_SOURCE -std=gnu11 -Wall -Wextra -O2 -g
-LDLIBS := -lpthread -lmysqlclient -lcrypt
+# 编译器和编译选项
+CC = gcc
+CFLAGS = -D_GNU_SOURCE -std=gnu11 -Wall -Wextra -O2 -g
 
-# 所有源文件（你可以手动添加，也可以自动发现）
-SRCS := 
-OBJS := $(SRCS:.c=.o)
+# 项目目录结构
+SRC_DIR := .
+OBJ_DIR := build
+BIN_DIR := bin
 
-# 最终目标程序名
-TARGET := ftp_server
+# 查找所有 .c 文件
+SOURCES := $(shell find $(SRC_DIR) -name '*.c')
+# 生成对应的 .o 文件路径
+OBJECTS := $(patsubst %.c, $(OBJ_DIR)/%.o, $(SOURCES))
+# 可执行文件名
+TARGET := main
 
 # 默认目标
-.PHONY: all clean rebuild
 all: $(TARGET)
 
-# 链接
-$(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
+# 链接生成可执行文件
+$(TARGET): $(OBJECTS)
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $^ -lpthread -lmysqlclient -lcrypt
 
-# 编译每个 .c 为 .o
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+# 编译 .c 文件为 .o 文件
+$(OBJ_DIR)/%.o: %.c
+	@mkdir -p $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c -o $@ $<
 
-# 清理
+# 清理目标
 clean:
-	rm -f $(TARGET) $(OBJS)
+	rm -rf $(OBJ_DIR) $(BIN_DIR)
 
-rebuild: clean all
+.PHONY: all clean
