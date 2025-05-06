@@ -1,7 +1,6 @@
-#ifndef CLOUD_STORAGE_H
-#define CLOUD_STORAGE_H
-
-#include "my_header.h"
+#ifndef HEADER_H
+#define HEADER_H
+#include "my_libs.h"
 
 extern char home[PATH_MAX];		// 网盘在服务端的根目录
 
@@ -14,19 +13,32 @@ extern __thread char virtual_path[PATH_MAX]; // 当前客户端的目录路径
 /*
  * 命令类型(type)定义
  */
-#define TLV_TYPE_TRANSFILE  0   // 用来表示传输文件以及传输目录
-#define TLV_TYPE_CD         1   // cd 命令：切换目录
-#define TLV_TYPE_LS         2   // ls 命令：列出目录
-#define TLV_TYPE_PUTS       3   // puts 命令：上传文件
-#define TLV_TYPE_GETS       4   // gets 命令：下载文件
-#define TLV_TYPE_REMOVE     5   // remove 命令：删除文件
-#define TLV_TYPE_PWD        6   // pwd 命令：显示当前目录
-#define TLV_TYPE_MKDIR      7   // mkdir 命令：新建目录
-#define TLV_TYPE_RMDIR      8   // rmdir 命令：删除目录
-#define TLV_TYPE_USERNAME   9   // 登录用户名
-#define TLV_TYPE_PASSWORD   10  // 登录密码
-
+typedef enum {
+    TLV_TYPE_TRANSFILE = 1,  // 用来表示传输文件以及传输目录
+    TLV_TYPE_CD,             // cd 命令：切换目录
+    TLV_TYPE_LS,             // ls 命令：列出目录
+    TLV_TYPE_PUTS,           // puts 命令：上传文件
+    TLV_TYPE_GETS,           // gets 命令：下载文件
+    TLV_TYPE_REMOVE,         // remove 命令：删除文件
+    TLV_TYPE_PWD,            // pwd 命令：显示当前目录
+    TLV_TYPE_MKDIR,          // mkdir 命令：新建目录
+    TLV_TYPE_RMDIR,          // rmdir 命令：删除目录
+    TLV_TYPE_USERINFO,       // 用户信息
+    TLV_TYPE_FILEINFO        // 文件元信息
+} TLV_TYPE;
+//文件类型
+typedef enum {
+    FILE_TYPE_UNKNOWN = 0,   // 未知类型
+    FILE_TYPE_REGULAR,       // 普通文件
+    FILE_TYPE_DIRECTORY,     // 目录
+    FILE_TYPE_SYMLINK,       // 符号链接
+    FILE_TYPE_SOCKET,        // 套接字
+    FILE_TYPE_CHAR_DEVICE,   // 字符设备
+    FILE_TYPE_BLOCK_DEVICE,  // 块设备
+    FILE_TYPE_FIFO           // 命名管道
+} FILE_TYPE;
 #define CHAR_SIZE 4096
+#define RESPONSE_SIZE 4096
 /*
  * TLV 协议数据包结构:
  * Type  : uint16_t 命令类型（如cd、ls、puts等）
@@ -34,7 +46,7 @@ extern __thread char virtual_path[PATH_MAX]; // 当前客户端的目录路径
  * Value : 数据内容，长度为Length字节
  */
 typedef struct {
-    uint16_t type;          // 命令类型
+    TLV_TYPE type;          // 命令类型
     uint16_t length;        // Value字段长度
     char value[CHAR_SIZE];	// 实际数据
 } tlv_packet_t;
@@ -88,11 +100,13 @@ typedef struct {
     int parent_id;               /**< 父目录ID */
     char hash[HASH_LEN];         /**< 文件哈希值 */
     char path[1024];             /**< 文件路径 */
+    FILE_TYPE type;              /**< 文件类型**/
     int is_directory;            /**< 是否为目录（0: 文件, 1: 目录） */
 } FileMeta;
 /** @} */
 
 /**
+ * @defgroup database_management 数据库管理
  * @defgroup database_management 数据库管理
  * @{
  */
@@ -162,40 +176,58 @@ int file_upload(const char* filename, const char* path, const char* hash);
 int file_download(const char* filename, const char* path);
 
 /**
+ * @brief 删除文件
+ * @param filename 文件名
+ * @param path 文件路径
+ * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
+ */
+int file_remove(const char* filename, const char* path);
+
+/**
  * @brief 创建目录
  * @param dirname 目录名
  * @param path 目录路径
+ * @param response  结果输出缓冲区
+ * @param res_size  缓冲区大小
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int dir_create(const char* dirname, const char* path);
+int dir_mkdir(const char* dirname, const char* path, char *response, size_t res_size);
 
 /**
  * @brief 删除目录
  * @param dirname 目录名
  * @param path 目录路径
+ * @param response  结果输出缓冲区
+ * @param res_size  缓冲区大小
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int dir_remove(const char* dirname, const char* path);
+int dir_rmkdir(const char* dirname, const char* path, char *response, size_t res_size);
 
 /**
  * @brief 列出目录内容
  * @param path 目录路径
+ * @param response  结果输出缓冲区
+ * @param res_size  缓冲区大小 
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int dir_list(const char* path);
+int dir_ls(const char* path, char *response, size_t res_size);
 
 /**
  * @brief 切换目录
  * @param path 目标路径
+ * @param response  结果输出缓冲区
+ * @param res_size  缓冲区大小
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int dir_change(const char* path);
+int dir_cd(const char* path, char *response, size_t res_size);
 
 /**
  * @brief 显示当前目录
+ * @param response  结果输出缓冲区
+ * @param res_size  缓冲区大小
  * @return SUCCESS 成功, FAILURE 失败, ERR_DB 数据库错误
  */
-int dir_pwd();
+int dir_pwd(char *response, size_t res_size);
 /** @} */
 
 /**
@@ -225,7 +257,6 @@ char* compute_sha1(const char* data, size_t len);
  */
 int db_query(const char* sql, void* result);
 /** @} */
-
 /**
  * @defgroup error_handling 错误处理
  * @{
@@ -248,6 +279,7 @@ void error_handling(const char* message);
  * @param message 消息
  */
 void log_message(const char* message);
-/** @} */
 
 #endif // CLOUD_STORAGE_H
+
+
