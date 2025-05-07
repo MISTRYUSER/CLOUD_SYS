@@ -225,8 +225,7 @@ int file_remove(MYSQL *mysql,const char* filename, const char* path);
  * @param res_size  缓冲区大小
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int dir_mkdir(MYSQL *mysql,const char* dirname, const char* path, char *response, size_t res_size);
-
+int dir_mkdir(MYSQL *mysql,const char *username, const char* dirname, char *response, size_t res_size);
 /**
  * @brief 删除目录
  * @param dirname 目录名
@@ -235,8 +234,7 @@ int dir_mkdir(MYSQL *mysql,const char* dirname, const char* path, char *response
  * @param res_size  缓冲区大小
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int dir_rmkdir(MYSQL *mysql,const char* dirname, const char* path, char *response, size_t res_size);
-
+int dir_rmdir(MYSQL *mysql,const char *username, const char* dirname, char *response, size_t res_size);
 /**
  * @brief 列出目录内容
  * @param path 目录路径
