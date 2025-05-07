@@ -7,7 +7,7 @@ extern char home[PATH_MAX];		// 网盘在服务端的根目录
 // 为每个线程创建一个独立的副本
 extern __thread char local_path[PATH_MAX];	 // 当前服务端的目录路径 
 extern __thread char virtual_path[PATH_MAX]; // 当前客户端的目录路径
-
+extern __thread int current_pwd_id;//当前目录 id
 #define  UPDATE_LOCAL_PATH do {strcpy(local_path, home);strncat(local_path, virtual_path, PATH_MAX - strlen(home) -1);} while(0)
 
 /*
