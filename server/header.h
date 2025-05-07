@@ -23,8 +23,11 @@ typedef enum {
     TLV_TYPE_PWD,            // pwd 命令：显示当前目录
     TLV_TYPE_MKDIR,          // mkdir 命令：新建目录
     TLV_TYPE_RMDIR,          // rmdir 命令：删除目录
-    TLV_TYPE_USERINFO,       // 用户信息
-    TLV_TYPE_FILEINFO        // 文件元信息
+    TLV_TYPE_FILEINFO,       // 文件元信息
+    TLV_TYPE_USERREGISTER,   // 用户注册                             
+    TLV_TYPE_USERLOGIN,      // 用户登录
+    TLV_TYPE_USERQUIT,       // 用户退出
+    TLV_TYPE_USERCANCEL      // 用户注销
 } TLV_TYPE;
 //文件类型
 typedef enum {
