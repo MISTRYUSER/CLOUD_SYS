@@ -69,6 +69,7 @@ typedef struct {
 #define FAILURE -1    /**< 操作失败 */
 #define ERR_PARAM -2  /**< 参数错误 */
 #define ERR_DB -3     /**< 数据库错误 */
+#define MAX_STACK_SIZE 1024 /**< 目录栈的最大容量 */
 /** @} */
 
 /**
@@ -106,8 +107,38 @@ typedef struct {
     FILE_TYPE type;              /**< 文件类型**/
     int is_directory;            /**< 是否为目录（0: 文件, 1: 目录） */
 } FileMeta;
-/** @} */
+typedef struct{
+    char *dir[MAX_STACK_SIZE];  //文件名
+    int top;    //栈头
+} PathStack;//用于管理目录层级
 
+extern _Thread_local PathStack thread_path_stack; // 为每个线程创建一个独立的栈
+/** @} */
+/*
+ * 初始化栈结构，用于管理目录层级
+ * @note 将栈顶指针设置为 -1，表示空栈
+ * return -1 为错误 0 为成功
+ */
+int  stack_init();
+
+/*
+ * 将目录名压入栈中，表示进入子目录
+ * @param dir   要压入的目录名（以 null 结尾的字符串）
+ * @return      0 表示成功，-1 表示失败（栈满或内存分配失败）
+ * @note        动态分配内存存储目录名，调用者无需提前分配
+ */
+int stack_push(const char *dir);
+
+/*
+ * 从栈中弹出一个目录名，表示返回上层目录
+ * @return      0 表示成功，-1 表示失败（栈空）
+ * @note        释放弹出的目录名内存
+ */
+int stack_pop();
+/*
+ * 获取栈顶的目录名
+ * @param dir   用于存储栈顶目录名的缓冲区
+ * @param size  缓冲区大小
 /**
  * @defgroup database_management 数据库管理
  * @defgroup database_management 数据库管理
@@ -138,7 +169,7 @@ int db_close(MYSQL *mysql);
  * @param password 密码
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int user_register(const char* username, const char* password);
+int user_register(MYSQL *mysql,const char* username, const char* password);
 
 /**
  * @brief 用户登录
@@ -146,14 +177,14 @@ int user_register(const char* username, const char* password);
  * @param password 密码
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int user_login(const char* username, const char* password);
+int user_login(MYSQL *mysql,const char* username, const char* password);
 
 /**
  * @brief 用户注销
  * @param username 用户名
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int user_logout(const char* username);
+int user_logout(MYSQL *mysql,const char* username);
 /** @} */
 
 /**
@@ -168,22 +199,32 @@ int user_logout(const char* username);
  * @param hash 文件哈希值
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
+<<<<<<< Updated upstream
 int file_upload(int sockfd, const char* filename, const char* path, const char* hash);
+=======
+int file_upload(MYSQL *mysql,const char* filename, const char* path, const char* hash);
+
+>>>>>>> Stashed changes
 /**
  * @brief 下载文件
  * @param filename 文件名
  * @param path 文件路径
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
+<<<<<<< Updated upstream
 int file_download(int sockfd, const char* filename, const char* path);
  
+=======
+int file_download(MYSQL *mysql,const char* filename, const char* path);
+
+>>>>>>> Stashed changes
 /**
  * @brief 删除文件
  * @param filename 文件名
  * @param path 文件路径
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int file_remove(const char* filename, const char* path);
+int file_remove(MYSQL *mysql,const char* filename, const char* path);
 
 /**
  * @brief 创建目录
@@ -193,7 +234,7 @@ int file_remove(const char* filename, const char* path);
  * @param res_size  缓冲区大小
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int dir_mkdir(const char* dirname, const char* path, char *response, size_t res_size);
+int dir_mkdir(MYSQL *mysql,const char* dirname, const char* path, char *response, size_t res_size);
 
 /**
  * @brief 删除目录
@@ -203,7 +244,7 @@ int dir_mkdir(const char* dirname, const char* path, char *response, size_t res_
  * @param res_size  缓冲区大小
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int dir_rmkdir(const char* dirname, const char* path, char *response, size_t res_size);
+int dir_rmkdir(MYSQL *mysql,const char* dirname, const char* path, char *response, size_t res_size);
 
 /**
  * @brief 列出目录内容
@@ -212,7 +253,7 @@ int dir_rmkdir(const char* dirname, const char* path, char *response, size_t res
  * @param res_size  缓冲区大小 
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int dir_ls(const char* path, char *response, size_t res_size);
+int dir_ls(MYSQL *mysql,const char* path, char *response, size_t res_size);
 
 /**
  * @brief 切换目录
@@ -221,7 +262,7 @@ int dir_ls(const char* path, char *response, size_t res_size);
  * @param res_size  缓冲区大小
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int dir_cd(const char* path, char *response, size_t res_size);
+int dir_cd(MYSQL *mysql,const char* path, char *response, size_t res_size);
 
 /**
  * @brief 显示当前目录
@@ -229,7 +270,7 @@ int dir_cd(const char* path, char *response, size_t res_size);
  * @param res_size  缓冲区大小
  * @return SUCCESS 成功, FAILURE 失败, ERR_DB 数据库错误
  */
-int dir_pwd(char *response, size_t res_size);
+int dir_pwd(MYSQL *mysql,char *response, size_t res_size);
 /** @} */
 
 /**
