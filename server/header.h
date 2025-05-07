@@ -168,16 +168,15 @@ int user_logout(const char* username);
  * @param hash 文件哈希值
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int file_upload(const char* filename, const char* path, const char* hash);
-
+int file_upload(int sockfd, const char* filename, const char* path, const char* hash);
 /**
  * @brief 下载文件
  * @param filename 文件名
  * @param path 文件路径
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int file_download(const char* filename, const char* path);
-
+int file_download(int sockfd, const char* filename, const char* path);
+ 
 /**
  * @brief 删除文件
  * @param filename 文件名
