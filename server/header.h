@@ -199,25 +199,16 @@ int user_logout(MYSQL *mysql,const char* username);
  * @param hash 文件哈希值
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-<<<<<<< Updated upstream
-int file_upload(int sockfd, const char* filename, const char* path, const char* hash);
-=======
 int file_upload(MYSQL *mysql,const char* filename, const char* path, const char* hash);
 
->>>>>>> Stashed changes
 /**
  * @brief 下载文件
  * @param filename 文件名
  * @param path 文件路径
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-<<<<<<< Updated upstream
-int file_download(int sockfd, const char* filename, const char* path);
- 
-=======
 int file_download(MYSQL *mysql,const char* filename, const char* path);
 
->>>>>>> Stashed changes
 /**
  * @brief 删除文件
  * @param filename 文件名
