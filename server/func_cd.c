@@ -5,7 +5,6 @@
 // 提高多线程并发访问时的线程安全性
 _Thread_local PathStack thread_path_stack = {{0}, 0}; // 目录数组，栈顶索引
 _Thread_local char cur_v_path[PATH_MAX] = "/";       // 当前虚拟路径字符串
-_Thread_local int current_dir_id = 0;                // 当前目录在数据库中的 ID（0 通常为根目录）
 
 /**
  * @brief 初始化目录栈结构，用于管理目录层级
@@ -15,7 +14,7 @@ _Thread_local int current_dir_id = 0;                // 当前目录在数据库
  */
 int stack_init() {
     thread_path_stack.top = -1; // 设置栈顶指针为 -1，表示空栈
-    current_dir_id = 0;         // 初始化当前目录 ID 为根目录（0）
+    current_pwd_id = 0;         // 初始化当前目录 ID 为根目录（0）
     strcpy(cur_v_path, "/");    // 初始化虚拟路径为 "/"
     return 0;                   // 返回成功（无错误检查）
 }
@@ -97,7 +96,7 @@ int stack_clear() {
         free(thread_path_stack.dir[thread_path_stack.top]);
         thread_path_stack.dir[thread_path_stack.top--] = NULL;
     }
-    current_dir_id = 0; // 重置目录 ID 为根目录
+    current_pwd_id = 0; // 重置目录 ID 为根目录
     strcpy(cur_v_path, "/"); // 重置路径为根目录
     return 0; // 返回成功
 }
@@ -119,7 +118,7 @@ int dir_cd(MYSQL *mysql, const char *path, char *response, size_t res_size) {
     }
 
     if (path[0] == '\0') {
-        snprintf(response, res_size, "当前目录：%s （ID : %d）\n", cur_v_path, current_dir_id);
+        snprintf(response, res_size, "当前目录：%s （ID : %d）\n", cur_v_path, current_pwd_id);
         return SUCCESS;
     }
 
@@ -142,13 +141,13 @@ int dir_cd(MYSQL *mysql, const char *path, char *response, size_t res_size) {
             if (stack_pop(mysql) == 0) {
                 printf("[调试] 成功弹出目录栈，查询上级目录 ID。\n");
 
-                if (current_dir_id == 0) {
+                if (current_pwd_id == 0) {
                     printf("[调试] 当前为根目录，无需更改。\n");
                 } else {
                     char sql_parent[1024];
                     snprintf(sql_parent, sizeof(sql_parent),
                              "SELECT parent_id FROM file_info WHERE id = %d AND hash IS NULL AND type = 1",
-                             current_dir_id);
+                             current_pwd_id);
                     printf("[调试] 执行 SQL 查询上级目录：%s\n", sql_parent);
 
                     MYSQL_RES *res_parent = NULL;
@@ -160,12 +159,12 @@ int dir_cd(MYSQL *mysql, const char *path, char *response, size_t res_size) {
                         return FAILURE;
                     }
                     MYSQL_ROW row_parent = mysql_fetch_row(res_parent);
-                    current_dir_id = atoi(row_parent[0]);
+                    current_pwd_id = atoi(row_parent[0]);
                     mysql_free_result(res_parent);
-                    printf("[调试] 当前目录 ID 更新为：%d\n", current_dir_id);
+                    printf("[调试] 当前目录 ID 更新为：%d\n", current_pwd_id);
                 }
             } else {
-                current_dir_id = 0;
+                current_pwd_id = 0;
                 printf("[调试] 目录栈已空，重置为根目录。\n");
             }
 
@@ -175,21 +174,37 @@ int dir_cd(MYSQL *mysql, const char *path, char *response, size_t res_size) {
             printf("[调试] 查询子目录 '%s'\n", token);
             char sql_child[1024];
             snprintf(sql_child, sizeof(sql_child),
-                     "SELECT id FROM file_info WHERE parent_id = %d AND filename = '%s' AND hash IS NULL AND type = 1",
-                     current_dir_id, token);
+                     "SELECT id FROM file_info WHERE parent_id = %d AND filename = '%s' AND hash IS NULL",
+                     current_pwd_id, token);
             printf("[调试] 执行 SQL：%s\n", sql_child);
 
+            // 声明一个用于接收查询结果的 MYSQL_RES 指针，初始设为 NULL
             MYSQL_RES *res_child = NULL;
-            if (db_query(mysql, sql_child, &res_child) != SUCCESS || !res_child || mysql_num_rows(res_child) == 0) {
-                snprintf(response, res_size, "cd: '%s': 没有这个目录\n", token);
-                printf("[错误] 子目录 '%s' 不存在。\n", token);
-                if (res_child) mysql_free_result(res_child);
+
+            // 执行 SQL 查询，查询子目录是否存在
+            // 若查询失败、结果为 NULL 或无任何结果行，则报错并返回失败
+            if (db_query(mysql, sql_child, &res_child) != SUCCESS || res_child == NULL || mysql_num_rows(res_child) == 0) {
+                snprintf(response, res_size, "cd: '%s': 没有这个目录\n", token); // 向客户端提示错误
+                printf("[错误] 子目录 '%s' 不存在。\n", token); // 控制台打印错误
+                if (res_child) mysql_free_result(res_child); // 若有分配结果集，释放它
                 return FAILURE;
             }
+
+            // 获取第一行查询结果（即该目录的记录）
             MYSQL_ROW row_child = mysql_fetch_row(res_child);
+
+            // 若获取行失败（理论上不会发生，除非查询出错），报错返回
+            if (row_child == NULL) {
+                snprintf(response, res_size, "cd: '%s': 目录不存在\n", token);
+                mysql_free_result(res_child);
+                return FAILURE;
+            }
+
+            // 从查询结果的第一列中提取目录 ID，并转换为整数
             int child_dir_id = atoi(row_child[0]);
+
+            // 使用完结果集后及时释放资源，防止内存泄漏
             mysql_free_result(res_child);
-            printf("[调试] 获取到子目录 ID：%d\n", child_dir_id);
 
             if (stack_push(token) != 0) {
                 snprintf(response, res_size, "cd: '%s': 目录栈溢出\n", token);
@@ -197,14 +212,14 @@ int dir_cd(MYSQL *mysql, const char *path, char *response, size_t res_size) {
                 return FAILURE;
             }
 
-            current_dir_id = child_dir_id;
-            printf("[调试] 更新当前目录 ID 为：%d\n", current_dir_id);
+            current_pwd_id = child_dir_id;
+            printf("[调试] 更新当前目录 ID 为：%d\n", current_pwd_id);
         }
 
         token = strtok(NULL, "/");
     }
 
-    snprintf(response, res_size, "当前目录：%s （ID : %d）\n", cur_v_path, current_dir_id);
-    printf("[调试] 路径切换完成，当前目录为 %s，ID 为 %d\n", cur_v_path, current_dir_id);
+    snprintf(response, res_size, "当前目录：%s （ID : %d）\n", cur_v_path, current_pwd_id);
+    printf("[调试] 路径切换完成，当前目录为 %s，ID 为 %d\n", cur_v_path, current_pwd_id);
     return SUCCESS;
 }

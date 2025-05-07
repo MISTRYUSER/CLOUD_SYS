@@ -242,7 +242,7 @@ int dir_rmdir(MYSQL *mysql,const char *username, const char* dirname, char *resp
  * @param res_size  缓冲区大小 
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int dir_ls(MYSQL *mysql,const char* path, char *response, size_t res_size);
+int dir_ls(MYSQL *mysql, char *response, size_t res_size,char *username);
 
 /**
  * @brief 切换目录

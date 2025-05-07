@@ -50,62 +50,60 @@ int db_close(MYSQL *mysql){
  *               - 若为 NULL，结果将自动释放或忽略
  * @return       成功返回 SUCCESS，失败返回 ERR_DB
  */
+// 执行数据库查询，并根据 SQL 类型将结果写入 result 指向的位置。
+// 参数：
+//   MYSQL *mysql     —— MySQL 连接句柄
+//   const char* sql  —— 要执行的 SQL 查询语句
+//   void* result     —— 输出参数，select 时为 MYSQL_RES**，insert/update/delete 时为 my_ulonglong*
+// 返回值：
+//   成功返回 SUCCESS，失败返回 ERR_DB
 int db_query(MYSQL *mysql, const char* sql, void* result) {
+    // 调用 mysql_query 执行 SQL 语句，若失败则返回错误码
     if (mysql_query(mysql, sql) != 0) {
         printf("[错误] SQL 执行失败: %s\n", sql);
         return ERR_DB;
     }
 
+    // 去除 SQL 语句前的空格，获取实际的 SQL 操作类型（如 SELECT、INSERT）
     const char* trimmed_sql = sql;
     while (isspace(*trimmed_sql)) trimmed_sql++;
+
+    // 提取 SQL 语句的第一个单词（操作类型），最大长度限制为 15 个字符
     char first_word[16] = {0};
     sscanf(trimmed_sql, "%15s", first_word);
+
+    // 将操作类型转为小写，便于统一比较
     for (int i = 0; first_word[i]; ++i) first_word[i] = tolower(first_word[i]);
 
+    // 若是 SELECT 查询，尝试读取结果集
     if (strcmp(first_word, "select") == 0) {
-        MYSQL_RES *res = mysql_store_result(mysql);
-        if (res == NULL) {
+        // 将结果强制转换为 MYSQL_RES 的二级指针
+        MYSQL_RES **res_ptr = (MYSQL_RES **)result;
+        // 从服务器获取完整结果集
+        *res_ptr = mysql_store_result(mysql);
+        // 若结果为空或出错，返回错误码
+        if (*res_ptr == NULL) {
             printf("[错误] 查询结果为空或出错\n");
             return ERR_DB;
         }
-
-        MYSQL_FIELD *fields = mysql_fetch_fields(res);
-        int num_fields = mysql_num_fields(res);
-        MYSQL_ROW row;
-
-        char *output = (char *)result;
-        size_t offset = 0;
-        output[0] = '\0';
-
-        for (int i = 0; i < num_fields; i++) {
-            offset += snprintf(output + offset, 4096 - offset, "%s\t", fields[i].name);
-        }
-        offset += snprintf(output + offset, 4096 - offset, "\n");
-
-        while ((row = mysql_fetch_row(res))) {
-            for (int i = 0; i < num_fields; i++) {
-                const char *val = row[i] ? row[i] : "NULL";
-                offset += snprintf(output + offset, 4096 - offset, "%s\t", val);
-            }
-            offset += snprintf(output + offset, 4096 - offset, "\n");
-        }
-
-        mysql_free_result(res);
         return SUCCESS;
-    }
-
+    } 
+    // 若是数据更新类操作（INSERT、UPDATE、DELETE）
     else if (strcmp(first_word, "insert") == 0 || strcmp(first_word, "update") == 0 || strcmp(first_word, "delete") == 0) {
+        // 获取受影响的行数
         my_ulonglong affected_rows = mysql_affected_rows(mysql);
+        // 若查询受影响行数失败，返回错误码
         if (affected_rows == (my_ulonglong)-1) {
             return ERR_DB;
         }
-
+        // 若 result 非空，将受影响的行数写入该位置
         if (result != NULL) {
-            snprintf((char*)result, 128, "受影响行数：%llu\n", affected_rows);
+            *(my_ulonglong *)result = affected_rows;
         }
-
+        printf("[调试] db_query result: '%s'\n", result);
         return SUCCESS;
     }
 
+    // 若不是已知的 SQL 类型，统一返回错误
     return ERR_DB;
 }
