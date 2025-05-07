@@ -257,11 +257,10 @@ int dir_cd(MYSQL *mysql,const char* path, char *response, size_t res_size);
 
 /**
  * @brief 显示当前目录
- * @param response  结果输出缓冲区
- * @param res_size  缓冲区大小
+ * @param path  结果输出path
  * @return SUCCESS 成功, FAILURE 失败, ERR_DB 数据库错误
  */
-int dir_pwd(MYSQL *mysql,char *response, size_t res_size);
+int dir_pwd(MYSQL *mysql,char *path);
 /** @} */
 
 /**

@@ -65,4 +65,5 @@ int dir_mkdir(MYSQL *mysql, int pwd,const char* dirname, char *response, size_t 
     char parent_path[CHAR_MAX]={0};
     sscanf(line,"%s",parent_path);
     
+    return SUCCESS;
 }
