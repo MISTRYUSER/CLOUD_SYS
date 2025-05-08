@@ -1,6 +1,8 @@
-<<<<<<< Updated upstream
 #include "thread_pool.h"
-
+__thread char current_user[50] = {0};
+__thread char local_path[PATH_MAX] = {0};
+__thread char virtual_path[PATH_MAX] = {0};
+__thread int current_pwd_id = 0;
 int exit_pipe[2];
 
 void handle(int  signum) {
@@ -54,37 +56,6 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
-=======
-#include "header.h"
-extern __thread int pwd = 0;//应该为 0
-int main()
-{
-    MYSQL *mysql = mysql_init(NULL);
-    // 初始化数据库连接
-    int n = db_init(mysql);
-    if (n == 0)
-    {
-        printf("数据库连接成功！\n");
-    }
-    else
-    {
-        printf("数据库连接失败！\n");
-        return -1;
-    }
-    char result[1024] = {0};
-    char sql[1024] = {0};
-    snprintf(sql,sizeof(sql),"select * from file_info");
-    db_query(mysql,sql,result);
-    printf("result:%s\n",result);
-    result[0] = '\0';
-    dir_cd(mysql,"/home",result,1024);
-    printf("result:%s\n",result);
-    result[0] = '\0';
-    int close = db_close(mysql); // 关闭数据库连接
-    if(close == 0)
-    {
-        printf("数据库关闭成功！\n");
->>>>>>> Stashed changes
     }
     return 0;
 }

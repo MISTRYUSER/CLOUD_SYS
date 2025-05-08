@@ -5,7 +5,7 @@ typedef enum {
     TLV_TYPE_SALT = 15,              // 发送盐值
     TLV_TYPE_REGISTER_CONFIRM = 16,  // 注册确认
     TLV_TYPE_LOGIN_CONFIRM = 17,     // 登录确认
-    TLV_TYPE_RESPONSE = 18           // 通用响应
+    //TLV_TYPE_RESPONSE = 18           // 通用响应
 } Additional_TLV_TYPE;
 
 // 初始化数据库连接
@@ -150,7 +150,7 @@ int delete_user(MYSQL *mysql, const char* username) {
 // 发送TLV包
 // 功能：将TLV包（类型、长度、值）序列化并通过套接字发送
 // 返回：0（成功），-1（失败）
-int send_tlv(int sock, int type, const char* value) {
+int send_tlv(int sock, TLV_TYPE type, const char* value) {
     tlv_packet_t tlv;
     tlv.type = type;
     strncpy(tlv.value, value, CHAR_SIZE - 1);
@@ -213,7 +213,7 @@ void* handle_client(void* arg) {
             generate_salt(salt);
             char full_salt[40];
             snprintf(full_salt, sizeof(full_salt), "$6$%s", salt);
-            send_tlv(client_fd, TLV_TYPE_SALT, full_salt);
+            send_tlv(client_fd, TLV_TYPE_USERREGISTER, full_salt);
             if (recv_tlv(client_fd, &tlv) <= 0) {
                 db_close(&mysql);
                 close(client_fd);
@@ -237,7 +237,7 @@ void* handle_client(void* arg) {
         if (get_salt(&mysql, username, salt) == SUCCESS) {
             char full_salt[40];
             snprintf(full_salt, sizeof(full_salt), "$6$%s", salt);
-            send_tlv(client_fd, TLV_TYPE_SALT, full_salt);
+            send_tlv(client_fd, TLV_TYPE_USERREGISTER, full_salt);
             if (recv_tlv(client_fd, &tlv) <= 0) {
                 db_close(&mysql);
                 close(client_fd);
@@ -298,7 +298,7 @@ int main() {
         int client_fd = accept(server_fd, NULL, NULL);
         ERROR_CHECK(client_fd, -1, "接受连接失败");
         pthread_t thread_id;
-        int* client_fd_ptr = malloc(sizeof(int));
+        int* client_fd_ptr = (int *)malloc(sizeof(int));
         *client_fd_ptr = client_fd;
         pthread_create(&thread_id, NULL, handle_client, client_fd_ptr);
         pthread_detach(thread_id);

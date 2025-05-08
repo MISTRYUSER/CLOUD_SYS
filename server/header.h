@@ -27,7 +27,8 @@ typedef enum {
     TLV_TYPE_USERREGISTER,   // 用户注册                             
     TLV_TYPE_USERLOGIN,      // 用户登录
     TLV_TYPE_USERQUIT,       // 用户退出
-    TLV_TYPE_USERCANCEL      // 用户注销
+    TLV_TYPE_USERCANCEL,     // 用户注销
+    TLV_TYPE_RESPONSE        // 通用响应（server --> client ERR_TYPE）
 } TLV_TYPE;
 //文件类型
 typedef enum {
@@ -199,7 +200,7 @@ int user_logout(MYSQL *mysql,const char* username);
  * @param hash 文件哈希值
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int file_upload(MYSQL *mysql,const char* filename, const char* path, const char* hash);
+int file_upload(int sockfd, const char* filename, const char* path, const char* hash);
 
 /**
  * @brief 下载文件
@@ -207,7 +208,7 @@ int file_upload(MYSQL *mysql,const char* filename, const char* path, const char*
  * @param path 文件路径
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int file_download(MYSQL *mysql,const char* filename, const char* path);
+int file_download(int sockfd, const char* filename, const char* path);
 
 /**
  * @brief 删除文件

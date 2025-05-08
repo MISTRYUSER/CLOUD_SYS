@@ -1,7 +1,7 @@
 #include "header.h"
 #include "thread_pool.h"
-#include "config.h"
 #include "password_auth_server.h"
+#include "fileserver.h"
 
 int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
     char response[RESPONSE_SIZE] = {0};
@@ -14,12 +14,13 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
     tlv_unpack(tlv_packet, &type, &len, value);
     value[len] = '\0';
 
+    static char current_username[50] = {0}; // 用于保存当前处理的用户名
     switch (type) {
     case TLV_TYPE_USERLOGIN: 
         {
             // 登录逻辑分为两个阶段：1. 发送用户名，2. 验证加密密码
-            static char current_username[50] = {0}; // 用于保存当前处理的用户名
             static int login_state = 0; // 0表示等待用户名，1表示等待加密密码
+            memset(current_username, 0, sizeof(current_username));
 
             if (login_state == 0) {
                 // 阶段1：接收用户名，查询并发送盐值
@@ -29,7 +30,7 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
                 if (get_salt(mysql, current_username, salt) == SUCCESS) {
                     char full_salt[SALT_LEN + 1];
                     snprintf(full_salt, sizeof(full_salt), "$6$%s", salt);
-                    ret = send_tlv(netfd, TLV_TYPE_SALT, full_salt);
+                    ret = send_tlv(netfd, TLV_TYPE_USERLOGIN, full_salt);
                     if (ret == 0) {
                         login_state = 1; // 进入下一阶段：等待加密密码
                     } else {
@@ -57,15 +58,14 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
                     send_tlv(netfd, TLV_TYPE_RESPONSE, response);
                 }
                 login_state = 0; // 重置状态，处理下一个登录请求
-                memset(current_username, 0, sizeof(current_username));
             }
             break;
         }
     case TLV_TYPE_USERREGISTER:     
         {
             // 注册逻辑分为两个阶段：1. 接收用户名，2. 接收加密密码并保存
-            static char current_username[50] = {0}; // 用于保存当前处理的用户名
             static int register_state = 0; // 0表示等待用户名，1表示等待加密密码
+            memset(current_username, 0, sizeof(current_username));
 
             if (register_state == 0) {
                 // 阶段1：接收用户名，检查是否已存在并发送盐值
@@ -81,7 +81,7 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
                     if (generate_salt(salt) == SUCCESS) {
                         char full_salt[40];
                         snprintf(full_salt, sizeof(full_salt), "$6$%s", salt);
-                        ret = send_tlv(netfd, TLV_TYPE_SALT, full_salt);
+                        ret = send_tlv(netfd, TLV_TYPE_USERREGISTER, full_salt);
                         if (ret == 0) {
                             register_state = 1; // 进入下一阶段：等待加密密码
                         } else {
@@ -111,7 +111,6 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
                     }
                 }
                 register_state = 0; // 重置状态，处理下一个注册请求
-                memset(current_username, 0, sizeof(current_username));
             }
             break;
         }
@@ -133,7 +132,7 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
         }
     case TLV_TYPE_LS: 
         {
-            ret = dir_ls(mysql, value, response, RESPONSE_SIZE);
+            ret = dir_ls(mysql, response ,RESPONSE_SIZE, current_username);
             if (ret == SUCCESS) {
                 send_tlv(netfd, TLV_TYPE_LS, response);
             } else {
@@ -163,7 +162,37 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
         }
     case TLV_TYPE_MKDIR:
         {
-            ret = dir_mkdir();
+            ret = dir_mkdir(mysql, current_username, value, response, RESPONSE_SIZE);
+            if (ret == SUCCESS) {
+                send_tlv(netfd, TLV_TYPE_MKDIR, response);
+            } else {
+                send_tlv(netfd, TLV_TYPE_RESPONSE, response);
+            }
+            break;
+        }
+    case TLV_TYPE_RMDIR:
+        {
+            ret = dir_rmdir(mysql, current_username, value, response, RESPONSE_SIZE);
+            if (ret == SUCCESS) {
+                send_tlv(netfd, TLV_TYPE_RMDIR, response);
+            } else {
+                send_tlv(netfd, TLV_TYPE_RESPONSE, response);
+            }
+            break;
+        }
+    case TLV_TYPE_GETS:
+        {
+            // TODO 
+            break;
+        }
+    case TLV_TYPE_PUTS:
+        {
+            // TODO
+            break;
+        }
+    case TLV_TYPE_REMOVE:
+        {
+            break;
         }
     default: 
         {

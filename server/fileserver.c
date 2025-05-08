@@ -137,13 +137,13 @@ int upload_file(int sockfd, int file_fd, const char* hash, long start_offset) {
     return SUCCESS;
 }
 
-int file_upload(int sockfd, const char* filename, const char* path, const char* hash) {
+int file_upload(MYSQL *mysql, const char* filename, const char* path, const char* hash) {
     MYSQL* conn = mysql_init(NULL);
     if (conn == NULL) {
         log_message(LOG_ERROR, "MySQL init failed.");
         return ERR_DB;
     }
-    if (mysql_real_connect(conn, "localhost", "root", "password", "my_database", 0, NULL, 0) == NULL) {
+    if (mysql_real_connect(conn, "localhost", "root", "362362", "my_database", 0, NULL, 0) == NULL) {
         log_message(LOG_ERROR, "MySQL connect failed: %s", mysql_error(conn));
         mysql_close(conn);
         return ERR_DB;
@@ -303,7 +303,7 @@ int file_download(int sockfd, const char* filename, const char* path) {
         log_message(LOG_ERROR, "MySQL init failed.");
         return ERR_DB;
     }
-    if (mysql_real_connect(conn, "localhost", "root", "password", "my_database", 0, NULL, 0) == NULL) {
+    if (mysql_real_connect(conn, "localhost", "root", "362362", "my_database", 0, NULL, 0) == NULL) {
         log_message(LOG_ERROR, "MySQL connect failed: %s", mysql_error(conn));
         mysql_close(conn);
         return ERR_DB;
