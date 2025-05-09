@@ -7,7 +7,7 @@ extern char home[PATH_MAX];		// 网盘在服务端的根目录
 // 为每个线程创建一个独立的副本
 extern __thread char local_path[PATH_MAX];	 // 当前服务端的目录路径 
 extern __thread char virtual_path[PATH_MAX]; // 当前客户端的目录路径
-
+extern __thread int current_pwd_id;//当前目录 id
 #define  UPDATE_LOCAL_PATH do {strcpy(local_path, home);strncat(local_path, virtual_path, PATH_MAX - strlen(home) -1);} while(0)
 
 /*
@@ -23,8 +23,12 @@ typedef enum {
     TLV_TYPE_PWD,            // pwd 命令：显示当前目录
     TLV_TYPE_MKDIR,          // mkdir 命令：新建目录
     TLV_TYPE_RMDIR,          // rmdir 命令：删除目录
-    TLV_TYPE_USERINFO,       // 用户信息
-    TLV_TYPE_FILEINFO        // 文件元信息
+    TLV_TYPE_FILEINFO,       // 文件元信息
+    TLV_TYPE_USERREGISTER,   // 用户注册                             
+    TLV_TYPE_USERLOGIN,      // 用户登录
+    TLV_TYPE_USERQUIT,       // 用户退出
+    TLV_TYPE_USERCANCEL,     // 用户注销
+    TLV_TYPE_RESPONSE        // 通用响应（server --> client ERR_TYPE）
 } TLV_TYPE;
 //文件类型
 typedef enum {
@@ -66,6 +70,7 @@ typedef struct {
 #define FAILURE -1    /**< 操作失败 */
 #define ERR_PARAM -2  /**< 参数错误 */
 #define ERR_DB -3     /**< 数据库错误 */
+#define MAX_STACK_SIZE 1024 /**< 目录栈的最大容量 */
 /** @} */
 
 /**
@@ -103,25 +108,54 @@ typedef struct {
     FILE_TYPE type;              /**< 文件类型**/
     int is_directory;            /**< 是否为目录（0: 文件, 1: 目录） */
 } FileMeta;
-/** @} */
+typedef struct{
+    char *dir[MAX_STACK_SIZE];  //文件名
+    int top;    //栈头
+} PathStack;//用于管理目录层级
 
+extern _Thread_local PathStack thread_path_stack; // 为每个线程创建一个独立的栈
+/** @} */
+/*
+ * 初始化栈结构，用于管理目录层级
+ * @note 将栈顶指针设置为 -1，表示空栈
+ * return -1 为错误 0 为成功
+ */
+int  stack_init();
+
+/*
+ * 将目录名压入栈中，表示进入子目录
+ * @param dir   要压入的目录名（以 null 结尾的字符串）
+ * @return      0 表示成功，-1 表示失败（栈满或内存分配失败）
+ * @note        动态分配内存存储目录名，调用者无需提前分配
+ */
+int stack_push(const char *dir);
+
+/*
+ * 从栈中弹出一个目录名，表示返回上层目录
+ * @return      0 表示成功，-1 表示失败（栈空）
+ * @note        释放弹出的目录名内存
+ */
+int stack_pop();
+/*
+ * 获取栈顶的目录名
+ * @param dir   用于存储栈顶目录名的缓冲区
+ * @param size  缓冲区大小
 /**
  * @defgroup database_management 数据库管理
- * @defgroup database_management 数据库管理
- * @{
+ * 
  */
 
 /**
  * @brief 初始化数据库连接
  * @return SUCCESS 成功, ERR_DB 失败
  */
-int db_init();
+int db_init(MYSQL *mysql);
 
 /**
  * @brief 关闭数据库连接
  * @return SUCCESS 成功, ERR_DB 失败
  */
-int db_close();
+int db_close(MYSQL *mysql);
 /** @} */
 
 /**
@@ -135,7 +169,7 @@ int db_close();
  * @param password 密码
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int user_register(const char* username, const char* password);
+int user_register(MYSQL *mysql,const char* username, const char* password);
 
 /**
  * @brief 用户登录
@@ -143,14 +177,14 @@ int user_register(const char* username, const char* password);
  * @param password 密码
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int user_login(const char* username, const char* password);
+int user_login(MYSQL *mysql,const char* username, const char* password);
 
 /**
  * @brief 用户注销
  * @param username 用户名
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int user_logout(const char* username);
+int user_logout(MYSQL *mysql,const char* username);
 /** @} */
 
 /**
@@ -165,7 +199,7 @@ int user_logout(const char* username);
  * @param hash 文件哈希值
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int file_upload(const char* filename, const char* path, const char* hash);
+int file_upload(MYSQL *mysql,const char* filename, const char* path, const char* hash);
 
 /**
  * @brief 下载文件
@@ -173,7 +207,7 @@ int file_upload(const char* filename, const char* path, const char* hash);
  * @param path 文件路径
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int file_download(const char* filename, const char* path);
+int file_download(MYSQL *mysql,const char* filename, const char* path);
 
 /**
  * @brief 删除文件
@@ -181,7 +215,7 @@ int file_download(const char* filename, const char* path);
  * @param path 文件路径
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int file_remove(const char* filename, const char* path);
+int file_remove(MYSQL *mysql,const char* filename, const char* path);
 
 /**
  * @brief 创建目录
@@ -191,8 +225,7 @@ int file_remove(const char* filename, const char* path);
  * @param res_size  缓冲区大小
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int dir_mkdir(const char* dirname, const char* path, char *response, size_t res_size);
-
+int dir_mkdir(MYSQL *mysql,const char *username, const char* dirname, char *response, size_t res_size);
 /**
  * @brief 删除目录
  * @param dirname 目录名
@@ -201,8 +234,7 @@ int dir_mkdir(const char* dirname, const char* path, char *response, size_t res_
  * @param res_size  缓冲区大小
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int dir_rmkdir(const char* dirname, const char* path, char *response, size_t res_size);
-
+int dir_rmdir(MYSQL *mysql,const char *username, const char* dirname, char *response, size_t res_size);
 /**
  * @brief 列出目录内容
  * @param path 目录路径
@@ -210,7 +242,7 @@ int dir_rmkdir(const char* dirname, const char* path, char *response, size_t res
  * @param res_size  缓冲区大小 
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int dir_ls(const char* path, char *response, size_t res_size);
+int dir_ls(MYSQL *mysql, char *response, size_t res_size,char *username);
 
 /**
  * @brief 切换目录
@@ -219,15 +251,14 @@ int dir_ls(const char* path, char *response, size_t res_size);
  * @param res_size  缓冲区大小
  * @return SUCCESS 成功, FAILURE 失败, ERR_PARAM 参数错误, ERR_DB 数据库错误
  */
-int dir_cd(const char* path, char *response, size_t res_size);
+int dir_cd(MYSQL *mysql,const char* path, char *response, size_t res_size);
 
 /**
  * @brief 显示当前目录
- * @param response  结果输出缓冲区
- * @param res_size  缓冲区大小
+ * @param path  结果输出path
  * @return SUCCESS 成功, FAILURE 失败, ERR_DB 数据库错误
  */
-int dir_pwd(char *response, size_t res_size);
+int dir_pwd(MYSQL *mysql,char *path);
 /** @} */
 
 /**
@@ -255,7 +286,7 @@ char* compute_sha1(const char* data, size_t len);
  * @param result 查询结果（需根据具体实现定义）
  * @return SUCCESS 成功, ERR_DB 失败
  */
-int db_query(const char* sql, void* result);
+int db_query(MYSQL *mysql,const char* sql, void* result);
 /** @} */
 /**
  * @defgroup error_handling 错误处理

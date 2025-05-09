@@ -1,11 +1,10 @@
 #include "thread_pool.h"
-#include "password_auth_server.h"
 void set_nonblock(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
-tlv_packet_t *tlv_packet = (tlv_packet_t *)malloc(TLV_SIZE);
+
 
 void *thread_func(void *arg) {
     thread_pool_t *thread_pool = (thread_pool_t *)arg;
@@ -38,10 +37,21 @@ void *thread_func(void *arg) {
         // solve command
         while (1) {
             // TODO tlv_packet free 在断开连接时候
-            recv_tlv(netfd, tlv_packet);
+            tlv_packet_t *tlv_packet = (tlv_packet_t *)malloc(TLV_SIZE);
+            int recv_result = recv_tlv(netfd, tlv_packet);
+            if (recv_result < 0) {
+                // 连接已关闭或出错
+                printf("连接关闭\n");
+                free(tlv_packet);
+                break;
+            }
             solve_command(netfd, tlv_packet, mysql);
             printf("命令处理结束\n");
+            free(tlv_packet);
         }
+        // 关闭连接并清理资源
+        close(netfd);
+        db_close(mysql);
     }
     return NULL;
 }

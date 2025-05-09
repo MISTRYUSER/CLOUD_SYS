@@ -1,7 +1,6 @@
 #ifndef THREAD_POOl
 #define THREAD_POOL
 #include "header.h"
-#include "config.h"
 #define WORKER_NUM 5
 #define MAX_CLIENTS 10
 
@@ -72,6 +71,6 @@ int fetch_string_by_username(MYSQL *mysql, const char *query_template, const cha
 int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql);
 
 int tlv_unpack(const tlv_packet_t *packet, TLV_TYPE *type, uint16_t *len, char *value);
-int tlv_pack(tlv_packet_t *packet, TLV_TYPE type, uint16_t len, const char *value);
+//int tlv_pack(tlv_packet_t *packet, TLV_TYPE type, uint16_t len, const char *value);
 
 #endif

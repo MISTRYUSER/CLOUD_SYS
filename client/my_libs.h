@@ -43,15 +43,12 @@
 #include <sys/select.h> // select多路复用
 #include <sys/epoll.h>  // epoll多路复用(Linux)
 #include <poll.h>       // poll机制
-#include <openssl/ssl.h>    // SSL/TLS支持
-#include <openssl/err.h>    // OpenSSL错误处理
-#include <openssl/sha.h>    // SHA哈希算法
 #include <syslog.h>     // 系统日志记录
 #include <sys/time.h>   // 高精度时间获取
 #include <sys/resource.h> // 资源限制控制
 #include <sys/uio.h>    // 向量I/O操作
 #include <zlib.h>       // gzip压缩支持
-
+#include <mysql/mysql.h>
 /*======== 宏定义（确保依赖的头文件已包含） ========*/
 #define ARGS_CHECK(argc, expected) \
     do { \

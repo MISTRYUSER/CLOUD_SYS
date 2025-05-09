@@ -18,7 +18,7 @@ int dir_ls(MYSQL *mysql, char *response, size_t res_size, char *username) {
 
     // 构造 SQL 查询
     char sql[256] = {0};
-    snprintf(sql, sizeof(sql), "SELECT * FROM file_info WHERE parent_id = %d AND (username = '%s' OR username = '0');", current_pwd_id, username);
+    snprintf(sql, sizeof(sql), "SELECT * FROM file_info WHERE id = %d AND (username = '%s' OR username = '0');", current_pwd_id, username);
 
     // 执行数据库查询
     MYSQL_RES *result = NULL;

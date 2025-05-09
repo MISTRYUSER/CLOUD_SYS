@@ -4,7 +4,7 @@ CFLAGS := -Wall -Wextra -O2 -g
 LDLIBS := -lpthread -lmysqlclient
 
 # 所有源文件
-SRC := main.c func_cd.c func_ls.c func_db.c func_dir.c
+SRC := tlv.c main.c func_cd.c func_ls.c func_db.c func_dir.c  tcp.c epoll.c thread_pool.c worker.c task_queue.c solve_command.c password_auth_server.c
 OBJ := $(SRC:.c=.o)
 
 # 最终生成的程序名

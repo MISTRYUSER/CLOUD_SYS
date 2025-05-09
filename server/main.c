@@ -4,14 +4,15 @@ __thread char local_path[PATH_MAX] = {0};
 __thread char virtual_path[PATH_MAX] = {0};
 __thread int current_pwd_id = 0;
 int exit_pipe[2];
-
+#define ip "127.0.0.1" 
+#define port "12345"
 void handle(int  signum) {
     printf("parent got signal = %d.\n", signum);
     write(exit_pipe[WRITE], "1", 1);
 }
 /* ./ftp_server 192.168.108.130 12345 */
 int main(int argc, char *argv[]) {
-    ARGS_CHECK(argc, 3);
+    // ARGS_CHECK(argc, 3);
     pipe(exit_pipe);
     // 父进程
     if (fork()) {
@@ -27,7 +28,7 @@ int main(int argc, char *argv[]) {
     thread_init(&thread_pool, WORKER_NUM);
     make_worker(&thread_pool);
 
-    int sockfd = tcp_init(argv[1], argv[2]);
+    int sockfd = tcp_init(ip, port);
     ERROR_CHECK(sockfd, -1, "socket");
     int epfd = epoll_create(1);
     epoll_add(epfd, sockfd);
