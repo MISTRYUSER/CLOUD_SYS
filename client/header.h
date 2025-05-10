@@ -17,19 +17,21 @@ typedef enum {
     TLV_TYPE_TRANSFILE = 1,  // 用来表示传输文件以及传输目录
     TLV_TYPE_CD,             // cd 命令：切换目录
     TLV_TYPE_LS,             // ls 命令：列出目录
-    TLV_TYPE_PUTS,           // puts 命令：上传文件
-    TLV_TYPE_GETS,           // gets 命令：下载文件
-    TLV_TYPE_REMOVE,         // remove 命令：删除文件
     TLV_TYPE_PWD,            // pwd 命令：显示当前目录
     TLV_TYPE_MKDIR,          // mkdir 命令：新建目录
     TLV_TYPE_RMDIR,          // rmdir 命令：删除目录
+    TLV_TYPE_REMOVE,         // remove 命令：删除文件
     TLV_TYPE_FILEINFO,       // 文件元信息
     TLV_TYPE_USERREGISTER,   // 用户注册                             
     TLV_TYPE_USERLOGIN,      // 用户登录
     TLV_TYPE_USERQUIT,       // 用户退出
-    TLV_TYPE_USERCANCEL,     // 用户注销
-    TLV_TYPE_RESPONSE        // 通用响应（server --> client ERR_TYPE）
+    TLV_TYPE_USERCANCEL,     // 用户注销   
+    TLV_TYPE_PUTS,           // puts 命令：上传文件
+    TLV_TYPE_GETS,           // gets 命令：下载文件
+    TLV_TYPE_RESPONSE,        // 通用响应（server --> client ERR_TYPE）
+    TLV_TYPE_CHUNK_DATA      // 分块数据传输（用于大文件上传） 
 } TLV_TYPE;
+
 //文件类型
 typedef enum {
     FILE_TYPE_UNKNOWN = 0,   // 未知类型
@@ -313,4 +315,5 @@ void log_message(const char* message);
 
 #endif // CLOUD_STORAGE_H
 
-
+int epoll_del(int epfd, int fd);
+int epoll_add(int epfd, int fd);

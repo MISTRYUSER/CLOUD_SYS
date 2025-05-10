@@ -24,7 +24,8 @@
 #include <unistd.h>     // POSIX系统调用
 #include <dirent.h>     // 目录操作
 #include <sys/mman.h>   // 内存映射文件
-#include <sys/sendfile.h> // 零拷贝文件传输
+/* macOS不支持sendfile.h */
+// #include <sys/sendfile.h> // 零拷贝文件传输
 #include <ftw.h>        // 文件树遍历（递归操作）
 #include <pwd.h>        // 用户账户信息
 #include <grp.h>        // 用户组信息

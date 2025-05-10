@@ -1,7 +1,8 @@
 #include "header.h"
 #include "thread_pool.h"
 
-int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
+
+int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql, client_state_t* state) {
     char response[RESPONSE_SIZE] = {0};
     int ret = SUCCESS;
     TLV_TYPE type;
@@ -11,8 +12,9 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
     // 解包TLV
     tlv_unpack(tlv_packet, &type, &len, value);
     value[len] = '\0';
-    printf("type = %d, len = %d, value = %s\n", type, len, value);
-    static char current_username[50] = {0}; // 用于保存当前处理的用户名
+    if (type == 0 && len == 0) return 0;
+    //printf("type = %d, len = %d, value = %s\n", type, len, value);
+
     switch (type) {
     case TLV_TYPE_USERLOGIN: 
         {
@@ -21,15 +23,16 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
             static struct {
                 char username[50];
                 int state; // 0表示等待用户名，1表示等待加密密码
-            } login_sessions[10] = {0}; // 支持最多10个并发登录会话
+            } 
+            login_sessions[10] = {0}; // 支持最多10个并发登录会话
             static int session_count = 0;
-            
-            memset(current_username, 0, sizeof(current_username));
+
+            //memset(current_username, 0, sizeof(current_username));
 
             // 查找当前连接的会话状态
             int session_index = -1;
             int is_new_session = 1;
-            
+
             // 检查是否已有该连接的会话
             for (int i = 0; i < session_count; i++) {
                 if (login_sessions[i].state == 1) { // 如果有等待密码的会话
@@ -38,9 +41,9 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
                     break;
                 }
             }
-            
+
             if (is_new_session) { // 新会话，等待用户名
-                // 阶段1：接收用户名，查询并发送盐值
+                                  // 阶段1：接收用户名，查询并发送盐值
                 strncpy(current_username, value, strlen(value));
                 current_username[strlen(value)] = '\0';
                 char salt[SALT_LEN + 1];
@@ -50,7 +53,7 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
                         session_index = session_count++;
                         strncpy(login_sessions[session_index].username, current_username, sizeof(login_sessions[session_index].username) - 1);
                         login_sessions[session_index].state = 1; // 设置为等待密码状态
-                        
+
                         char full_salt[SALT_LEN + 20]; // 增加缓冲区大小以容纳前缀
                         snprintf(full_salt, sizeof(full_salt), "$6$%s", salt);
                         ret = send_tlv(netfd, TLV_TYPE_USERLOGIN, full_salt);
@@ -69,17 +72,21 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
                     send_tlv(netfd, TLV_TYPE_RESPONSE, response);
                 }
             } else { // 已有会话，等待密码
-                // 阶段2：接收加密密码并验证
-                // 从会话中获取用户名
+                     // 阶段2：接收加密密码并验证
+                     // 从会话中获取用户名
                 strncpy(current_username, login_sessions[session_index].username, sizeof(current_username) - 1);
                 current_username[sizeof(current_username) - 1] = '\0';
-                
+
                 char stored_hash[128];
                 if (get_encrypted_password(mysql, current_username, stored_hash) == SUCCESS) {
                     if (strcmp(value, stored_hash) == 0) {
                         snprintf(response, RESPONSE_SIZE, "登录成功");
                         send_tlv(netfd, TLV_TYPE_USERLOGIN, response);
-                        current_pwd_id = 0; // 初始化为根目录
+                        current_pwd_id = 1; // 初始化为根目录，根目录ID=1
+                        state->username[sizeof(state->username) - 1] = '\0';
+                        state->logged_in = 1;
+                        state->current_pwd_id = 1;
+                        stack_init();
                         stack_init(); // 初始化目录栈
                     } else {
                         snprintf(response, RESPONSE_SIZE, "登录失败：密码错误");
@@ -89,7 +96,7 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
                     snprintf(response, RESPONSE_SIZE, "用户不存在");
                     send_tlv(netfd, TLV_TYPE_RESPONSE, response);
                 }
-                
+
                 // 重置会话状态
                 login_sessions[session_index].state = 0;
                 // 移动最后一个会话到当前位置，减少会话计数
@@ -100,6 +107,7 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
             }
             break;
         }
+
     case TLV_TYPE_USERREGISTER:     
         {
             // 注册逻辑分为两个阶段：1. 接收用户名，2. 接收加密密码并保存
@@ -108,13 +116,14 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
                 char username[50];
                 char salt[25]; // 临时存储生成的盐值
                 int state; // 0表示等待用户名，1表示等待加密密码
-            } register_sessions[10] = {0}; // 支持最多10个并发注册会话
+            }
+            register_sessions[10] = {0}; // 支持最多10个并发注册会话
             static int reg_session_count = 0;
             printf("注册会话数: %d\n", reg_session_count);
             // 查找当前连接的注册会话状态
             int reg_session_index = -1;
             int is_new_reg_session = 1;
-            
+
             // 检查是否已有该连接的注册会话
             for (int i = 0; i < reg_session_count; i++) {
                 if (register_sessions[i].state == 1) { // 如果有等待密码的会话
@@ -123,9 +132,9 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
                     break;
                 }
             }
-            
+
             if (is_new_reg_session) { // 新会话，等待用户名
-                // 阶段1：接收用户名，检查是否已存在并发送盐值
+                                      // 阶段1：接收用户名，检查是否已存在并发送盐值
                 memset(current_username, 0, sizeof(current_username));
                 strncpy(current_username, value, strlen(value));
                 current_username[strlen(value)] = '\0';
@@ -139,7 +148,7 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
                         reg_session_index = reg_session_count++;
                         strncpy(register_sessions[reg_session_index].username, current_username, sizeof(register_sessions[reg_session_index].username) - 1);
                         register_sessions[reg_session_index].state = 1; // 设置为等待密码状态
-                        
+
                         // 生成并保存盐值
                         memset(register_sessions[reg_session_index].salt, 0, sizeof(register_sessions[reg_session_index].salt));
                         printf("生成盐值...\n");
@@ -165,11 +174,11 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
                     }
                 }
             } else { // 已有会话，等待密码
-                // 阶段2：接收加密密码并保存到数据库
-                // 从会话中获取用户名和盐值
+                     // 阶段2：接收加密密码并保存到数据库
+                     // 从会话中获取用户名和盐值
                 strncpy(current_username, register_sessions[reg_session_index].username, sizeof(current_username) - 1);
                 current_username[sizeof(current_username) - 1] = '\0';
-                
+
                 if (strlen(register_sessions[reg_session_index].salt) == 0) { // 检查临时盐值是否有效
                     snprintf(response, RESPONSE_SIZE, "无法获取盐值");
                     send_tlv(netfd, TLV_TYPE_RESPONSE, response);
@@ -182,7 +191,7 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
                         send_tlv(netfd, TLV_TYPE_RESPONSE, response);
                     }
                 }
-                
+
                 // 重置会话状态
                 register_sessions[reg_session_index].state = 0;
                 // 移动最后一个会话到当前位置，减少会话计数
@@ -211,11 +220,23 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
         }
     case TLV_TYPE_LS: 
         {
-            printf("进入了ls\n");
-            ret = dir_ls(mysql, response ,RESPONSE_SIZE, current_username);
+            printf("进入了ls, current_username = %s\n", current_username);
+            // 确保current_username不为空
+            if (!current_username || strlen(current_username) == 0) {
+                snprintf(response, RESPONSE_SIZE, "用户名未设置，无法列出目录内容");
+                printf("用户名为空，无法执行ls命令\n");
+                send_tlv(netfd, TLV_TYPE_RESPONSE, response);
+                break;
+            }
+            
+            ret = dir_ls(mysql, response, RESPONSE_SIZE, current_username);
+            printf("ls返回值: %d, response内容: %s\n", ret, response);
+            
             if (ret == SUCCESS) {
+                printf("ls命令成功执行\n");
                 send_tlv(netfd, TLV_TYPE_LS, response);
             } else {
+                printf("ls命令执行失败，错误码: %d\n", ret);
                 send_tlv(netfd, TLV_TYPE_RESPONSE, response);
             }
             break;
@@ -260,55 +281,36 @@ int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql) {
             }
             break;
         }
-    case TLV_TYPE_GETS:
+        case TLV_TYPE_REMOVE:
         {
-            // TODO 
+            printf("处理删除文件请求: %s\n", value);
+            // 假设 value 是文件名
+            char *filename = value;
+            // 获取当前路径
+            char path[PATH_MAX] = {0};
+            printf("我进来了remove \n");
+            if (get_current_path(mysql, path, PATH_MAX) != SUCCESS) {
+                snprintf(response, RESPONSE_SIZE, "获取当前路径失败");
+                send_tlv(netfd, TLV_TYPE_RESPONSE, response);
+                break;
+            }
+            // 调用 file_remove 函数
+            ret = file_remove(mysql, current_username, filename, path, response, RESPONSE_SIZE);
+            if (ret == SUCCESS) {
+                send_tlv(netfd, TLV_TYPE_REMOVE, response);
+            } else {
+                send_tlv(netfd, TLV_TYPE_RESPONSE, response);
+            }
             break;
         }
-    case TLV_TYPE_PUTS:
-        {
-            // TODO
-            break;
-        }
-    case TLV_TYPE_REMOVE:
-        {
-            break;
-        }
-    // 处理客户端发送的额外TLV类型
-    // case 21: // TLV_TYPE_REGISTER_CONFIRM
-    //     {
-    //         // 这是客户端注册确认的响应，应该由USERREGISTER的第二阶段处理
-    //         // 如果单独收到这个包，说明状态不同步，返回错误
-    //         printf("收到注册确认包，但当前不在注册流程中\n");
-    //         snprintf(response, RESPONSE_SIZE, "状态错误：请先发送用户名");
-    //         send_tlv(netfd, TLV_TYPE_RESPONSE, response);
-    //         break;
-    //     }
-    // case 22: // TLV_TYPE_LOGIN_CONFIRM
-    //     {
-    //         // 这是客户端登录确认的响应，应该由USERLOGIN的第二阶段处理
-    //         // 如果单独收到这个包，说明状态不同步，返回错误
-    //         printf("收到登录确认包，但当前不在登录流程中\n");
-    //         snprintf(response, RESPONSE_SIZE, "状态错误：请先发送用户名");
-    //         send_tlv(netfd, TLV_TYPE_RESPONSE, response);
-    //         break;
-    //     }
     default: 
         {
-            // 对于未知的命令类型，记录详细信息并返回错误响应
-             printf("收到未知命令类型: %d, 值: %s\n", type, value);
-             snprintf(response, RESPONSE_SIZE, "无效命令");
-             send_tlv(netfd, TLV_TYPE_RESPONSE, response);
+            // printf("收到未知命令类型: %d, 值: %s\n", type, value);
+            // snprintf(response, RESPONSE_SIZE, "无效命令");
+            // send_tlv(netfd, TLV_TYPE_RESPONSE, response);
             break;
         }
     }
     return ret;
 }
 
-// // 假设的 tlv_unpack 函数，用于从 tlv_packet_t 中提取 type, length, value
-// void tlv_unpack(tlv_packet_t *tlv_packet, TLV_TYPE *type, uint16_t *len, char *value) {
-//     *type = tlv_packet->type;
-//     *len = tlv_packet->length;
-//     strncpy(value, tlv_packet->value, tlv_packet->length);
-//     value[tlv_packet->length] = '\0';
-// }

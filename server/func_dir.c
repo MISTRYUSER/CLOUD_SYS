@@ -86,7 +86,12 @@ int dir_mkdir(MYSQL *mysql, const char *username, const char *dirname, char *res
     if (strcmp(parent_path, "/") == 0) {
         snprintf(new_path, sizeof(new_path), "/%s", dirname);
     } else {
-        snprintf(new_path, sizeof(new_path), "%s/%s", parent_path, dirname);
+        // 检查parent_path是否以"/"结尾
+        if (parent_path[strlen(parent_path) - 1] == '/') {
+            snprintf(new_path, sizeof(new_path), "%s%s", parent_path, dirname);
+        } else {
+            snprintf(new_path, sizeof(new_path), "%s/%s", parent_path, dirname);
+        }
     }
     printf("[dir_mkdir] 构造新路径: %s\n", new_path);
 

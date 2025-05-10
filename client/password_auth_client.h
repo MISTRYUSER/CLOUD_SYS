@@ -26,6 +26,6 @@ void handle_register(int sock);
 void handle_login(int sock);
      
 void handle_cancel(int sock);
-
+void* listen_server(void* arg);
 void handle_filesystem_commands(int sock,char *username);
 #endif // __PASSWORD_AUTH_CLIENT__

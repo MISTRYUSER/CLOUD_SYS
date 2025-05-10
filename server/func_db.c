@@ -19,7 +19,7 @@ int db_init(MYSQL *mysql){
         printf("mysql_init failed\n");
         return ERR_DB;
     }
-    if(!mysql_real_connect(mysql,"localhost","root","12345","my_database",3306,NULL,0)){
+    if(!mysql_real_connect(mysql,"localhost","root","12345","my_database",0,NULL,0)){
         printf("连接失败：%s\n",mysql_error(mysql));
         printf("mysql_real_connect failed\n");
         mysql_close(mysql);

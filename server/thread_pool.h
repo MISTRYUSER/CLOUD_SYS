@@ -9,7 +9,15 @@
 
 #define OUT     1
 #define KEEP    0
-
+typedef struct {
+    int netfd;          // 客户端文件描述符
+    char username[50];  // 用户名
+    int logged_in;      // 是否已登录，0未登录，1已登录
+    int current_pwd_id; // 当前目录ID
+    char virtual_path[PATH_MAX]; // 当前虚拟路径
+    int is_alive;       // 0 不活跃 1 活跃
+    time_t last_active; // 上次活跃时间
+} client_state_t;
 extern __thread char current_user[50]; // 线程本地存储的用户名
 
 #define TLV_SIZE sizeof(tlv_packet_t)
@@ -18,8 +26,16 @@ typedef struct tid_arr_s {      // 线程 ---- tid
     int worker_num;             // 数组长度
 } tid_arr_t;
 
-typedef struct node_s {
+typedef struct long_command_s { // 用来处理长命令的
     int netfd;
+    tlv_packet_t tlv_packet;
+    client_state_t* state;
+} long_command_t;
+
+typedef struct node_s {
+    long_command_t long_command;
+    //    int netfd;
+//    tlv_packet_t *tlv_packet_long_command;
     struct node_s *next;
 } node_t;
 
@@ -46,7 +62,7 @@ typedef struct {
 
 
 int task_queue_init(task_queue_t *queue);
-int en_queue(task_queue_t *queue, int netfd);
+int en_queue(task_queue_t *queue, long_command_t long_command);
 int de_queue(task_queue_t *queue);
 int print_queue(task_queue_t *queue);
 
@@ -68,8 +84,8 @@ int tcp_init(char *ip, char *port);
  * @return SUCCESS/ERR_PARAM/ERR_DB
  */
 int fetch_string_by_username(MYSQL *mysql, const char *query_template, const char *username, char *result, size_t result_size);
-int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql);
-
+int solve_command(int netfd, tlv_packet_t *tlv_packet, MYSQL *mysql, client_state_t* state);
+int long_solve_command(int netfd, tlv_packet_t *long_tlv_packet, MYSQL *mysql, client_state_t* state);
 int tlv_unpack(const tlv_packet_t *packet, TLV_TYPE *type, uint16_t *len, char *value);
 //int tlv_pack(tlv_packet_t *packet, TLV_TYPE type, uint16_t len, const char *value);
 

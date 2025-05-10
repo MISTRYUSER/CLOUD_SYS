@@ -153,7 +153,7 @@ int delete_user(MYSQL *mysql, const char* username) {
 int send_tlv(int sock, int type, const char* value) {
     tlv_packet_t tlv;
     memset(&tlv, 0, sizeof(tlv_packet_t));
-    tlv.type = type;
+    tlv.type = (TLV_TYPE)type;
     strncpy(tlv.value, value, CHAR_SIZE - 1);
     tlv.value[CHAR_SIZE - 1] = '\0';
     tlv.length = strlen(tlv.value);
@@ -162,19 +162,19 @@ int send_tlv(int sock, int type, const char* value) {
     size_t total = 0;
     while (total < sizeof(tlv.type)) {
         sent = send(sock, (char*)&tlv.type + total, sizeof(tlv.type) - total, 0);
-        ERROR_CHECK(sent, -1, "发送类型失败");
+//        ERROR_CHECK(sent, -1, "发送类型失败");
         total += sent;
     }
     total = 0;
     while (total < sizeof(tlv.length)) {
         sent = send(sock, (char*)&tlv.length + total, sizeof(tlv.length) - total, 0);
-        ERROR_CHECK(sent, -1, "发送长度失败");
+//        ERROR_CHECK(sent, -1, "发送长度失败");
         total += sent;
     }
     total = 0;
     while (total < tlv.length) {
         sent = send(sock, tlv.value + total, tlv.length - total, 0);
-        ERROR_CHECK(sent, -1, "发送值失败");
+//        ERROR_CHECK(sent, -1, "发送值失败");
         total += sent;
     }
     printf("发送成功 - 类型: %d, 值: %s\n", type, value);
@@ -193,7 +193,7 @@ int recv_tlv(int sock, tlv_packet_t *tlv) {
         received = recv(sock, buffer + total, sizeof(tlv->type) - total, 0);
         if (received <= 0) {
             if (received == 0) printf("1连接关闭\n");
-            else ERROR_CHECK(received, -1, "接收类型失败");
+//            else ERROR_CHECK(received, -1, "接收类型失败");
             return received;
         }
         total += received;
@@ -223,7 +223,7 @@ int recv_tlv(int sock, tlv_packet_t *tlv) {
         received = recv(sock, buffer + total, tlv->length - total, 0);
         if (received <= 0) {
             if (received == 0) printf("3连接关闭\n");
-            else ERROR_CHECK(received, -1, "接收值失败");
+//            else ERROR_CHECK(received, -1, "接收值失败");
             return received;
         }
         total += received;
@@ -233,129 +233,3 @@ int recv_tlv(int sock, tlv_packet_t *tlv) {
     printf("TLV 包接收成功 - 类型: %d, 值: %s\n", tlv->type, tlv->value);
     return tlv->length;
 }
-
-// // 处理客户端请求
-// void* handle_client(void* arg) {
-//     int client_fd = *(int*)arg;
-//     free(arg);
-//     printf("新客户端连接成功, 套接字: %d\n", client_fd);
-
-//     MYSQL *mysql;
-//     if (db_init(&mysql) != SUCCESS) {
-//         printf("mysql_init failed\n");
-//         close(client_fd);
-//         return NULL;
-//     }
-//     if (db_init(&mysql) != SUCCESS) {
-//         printf("客户端 %d 处理失败: 数据库初始化失败\n", client_fd);
-//         mysql_close(mysql);
-//         close(client_fd);
-//         return NULL;
-//     }
-//     tlv_packet_t tlv;
-//     int bytes_received = recv_tlv(client_fd, &tlv);
-//     if (bytes_received <= 0) {
-//         printf("客户端 %d 接收 TLV 包失败, 接收字节数: %d\n", client_fd, bytes_received);
-//         db_close(mysql);
-//         close(client_fd);
-//         return NULL;
-//     }
-//     printf("处理 TLV 包 - 接收到的类型: %d, 值: %s\n", tlv.type, tlv.value);
-
-//     if (tlv.type == TLV_TYPE_USERREGISTER) {
-//         char username[50];
-//         sscanf(tlv.value, "%s", username);
-//         printf("接收到注册请求, 用户名: %s\n", username);
-//         printf("检查用户是否存在...\n");
-//         int exists = user_exists(mysql, username);
-//         if (exists == -1) {
-//             printf("用户存在性检查出错\n");
-//             send_tlv(client_fd, TLV_TYPE_RESPONSE, "服务器错误");
-//         } else {
-//             printf("用户存在性检查结果: %d\n", exists);
-//             if (exists) {
-//                 send_tlv(client_fd, TLV_TYPE_RESPONSE, "用户名已存在");
-//             } else {
-//                 char salt[21] = {0};
-//                 printf("生成盐值...\n");
-//                 if (generate_salt(salt, sizeof(salt)) != SUCCESS) {
-//                     printf("盐值生成失败\n");
-//                     send_tlv(client_fd, TLV_TYPE_RESPONSE, "服务器错误");
-//                     db_close(mysql);
-//                     close(client_fd);
-//                     return NULL;
-//                 }
-//                 char full_salt[40];
-//                 snprintf(full_salt, sizeof(full_salt), "$6$%s", salt);
-//                 send_tlv(client_fd, TLV_TYPE_SALT, full_salt);
-//                 if (recv_tlv(client_fd, &tlv) <= 0) {
-//                     printf("客户端 %d 注册确认接收失败\n", client_fd);
-//                     db_close(mysql);
-//                     close(client_fd);
-//                     return NULL;
-//                 }
-//                 if (tlv.type == TLV_TYPE_REGISTER_CONFIRM) {
-//                     printf("接收到注册确认, 加密密码: %s\n", tlv.value);
-//                     char* encrypted_password = tlv.value;
-//                     if (insert_user(mysql, username, salt, encrypted_password) == SUCCESS) {
-//                         send_tlv(client_fd, TLV_TYPE_RESPONSE, "注册成功");
-//                     } else {
-//                         send_tlv(client_fd, TLV_TYPE_RESPONSE, "注册失败");
-//                     }
-//                 } else {
-//                     send_tlv(client_fd, TLV_TYPE_RESPONSE, "无效序列");
-//                 }
-//             }
-//         }
-//     } else if (tlv.type == TLV_TYPE_USERLOGIN) {
-//         char username[50];
-//         sscanf(tlv.value, "%s", username);
-//         printf("接收到登录请求, 用户名: %s\n", username);
-//         char salt[21];
-//         if (get_salt(mysql, username, salt) == SUCCESS) {
-//             char full_salt[40];
-//             snprintf(full_salt, sizeof(full_salt), "$6$%s", salt);
-//             send_tlv(client_fd, TLV_TYPE_SALT, full_salt);
-//             if (recv_tlv(client_fd, &tlv) <= 0) {
-//                 printf("客户端 %d 登录确认接收失败\n", client_fd);
-//                 db_close(mysql);
-//                 close(client_fd);
-//                 return NULL;
-//             }
-//             if (tlv.type == TLV_TYPE_LOGIN_CONFIRM) {
-//                 printf("接收到登录确认, 加密密码: %s\n", tlv.value);
-//                 char* received_hash = tlv.value;
-//                 char stored_hash[128];
-//                 if (get_encrypted_password(mysql, username, stored_hash) == SUCCESS) {
-//                     if (strcmp(received_hash, stored_hash) == 0) {
-//                         send_tlv(client_fd, TLV_TYPE_RESPONSE, "登录成功");
-//                     } else {
-//                         send_tlv(client_fd, TLV_TYPE_RESPONSE, "登录失败");
-//                     }
-//                 } else {
-//                     send_tlv(client_fd, TLV_TYPE_RESPONSE, "用户不存在");
-//                 }
-//             } else {
-//                 send_tlv(client_fd, TLV_TYPE_RESPONSE, "无效序列");
-//             }
-//         } else {
-//             send_tlv(client_fd, TLV_TYPE_RESPONSE, "用户不存在");
-//         }
-//     } else if (tlv.type == TLV_TYPE_USERCANCEL) {
-//         char username[50];
-//         sscanf(tlv.value, "%s", username);
-//         printf("接收到注销请求, 用户名: %s\n", username);
-//         if (delete_user(mysql, username) == SUCCESS) {
-//             send_tlv(client_fd, TLV_TYPE_RESPONSE, "注销成功");
-//         } else {
-//             send_tlv(client_fd, TLV_TYPE_RESPONSE, "注销失败");
-//         }
-//     } else {
-//         send_tlv(client_fd, TLV_TYPE_RESPONSE, "无效命令");
-//     }
-
-//     db_close(mysql);
-//     printf("客户端 %d 处理完成, 连接关闭\n", client_fd);
-//     close(client_fd);
-//     return NULL;
-// }

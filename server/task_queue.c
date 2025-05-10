@@ -6,10 +6,10 @@ int task_queue_init(task_queue_t *queue) {
 }
 
 // 尾插
-int en_queue(task_queue_t *queue, int netfd) {
+int en_queue(task_queue_t *queue, long_command_t long_command) {
     node_t *node = (node_t *)malloc(sizeof(node_t));
     node->next = NULL;
-    node->netfd = netfd;
+    node->long_command = long_command;
     if (queue->size == 0) {
         queue->front = node;
         queue->rear = node;
@@ -39,7 +39,7 @@ int de_queue(task_queue_t *queue) {
 int print_queue(task_queue_t *queue) {
     node_t *node = queue->front;
     while (node != NULL) {
-        printf("%d", node->netfd);
+        printf("%d", node->long_command.netfd);
         if (node->next != NULL) {
             printf("-->");
         }

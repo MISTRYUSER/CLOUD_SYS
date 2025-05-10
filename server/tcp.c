@@ -11,7 +11,7 @@ int tcp_init(char *ip, char *port) {
     int flag = 1;
     setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&flag,sizeof(flag));
     ssize_t bind_ret = bind(sockfd, (struct sockaddr *)&addr, sizeof(addr));
-    ERROR_CHECK(bind_ret, -1, "bind");
+    //ERROR_CHECK(bind_ret, -1, "bind");
 
     listen(sockfd, 50);
     return sockfd;

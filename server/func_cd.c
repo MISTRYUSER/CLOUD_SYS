@@ -14,7 +14,7 @@ _Thread_local char cur_v_path[PATH_MAX] = "/";       // 当前虚拟路径字符
  */
 int stack_init() {
     thread_path_stack.top = -1; // 设置栈顶指针为 -1，表示空栈
-    current_pwd_id = 0;         // 初始化当前目录 ID 为根目录（0）
+    current_pwd_id = 1;         // 初始化当前目录 ID 为根目录（0）
     strcpy(cur_v_path, "/");    // 初始化虚拟路径为 "/"
     return 0;                   // 返回成功（无错误检查）
 }
@@ -27,27 +27,27 @@ int stack_init() {
  * @warning 使用 _Thread_local 变量确保线程安全
  */
 int stack_push(const char *dir) {
-    if (!dir || dir[0] == '\0') return -1; // 检查目录名是否有效且非空
-    if (thread_path_stack.top >= MAX_STACK_SIZE - 1) return -1; // 检查栈是否已满
+    if (!dir || dir[0] == '\0') return -1;
+    if (thread_path_stack.top >= MAX_STACK_SIZE - 1) return -1;
 
-    // 分配内存并复制目录名
     char *dir_copy = strdup(dir);
-    if (!dir_copy) return -1; // 检查内存分配是否失败
+    if (!dir_copy) return -1;
 
-    thread_path_stack.top++; // 栈顶指针加一
+    thread_path_stack.top++;
     thread_path_stack.dir[thread_path_stack.top] = dir_copy;
 
-    // 重建虚拟路径
-    char temp[PATH_MAX];
-    if (thread_path_stack.top == 0) {
-        snprintf(temp, PATH_MAX, "/%s", dir); // 第一个元素，路径为 "/dir"
-    } else {
-        snprintf(temp, PATH_MAX, "%s/%s", cur_v_path, dir); // 追加到当前路径
+    // 重建虚拟路径，从根目录开始
+    char temp[PATH_MAX] = "/"; // 始终以单一 / 开头
+    for (int i = 0; i <= thread_path_stack.top; i++) {
+        strncat(temp, thread_path_stack.dir[i], PATH_MAX - strlen(temp) - 1);
+        if (i < thread_path_stack.top) {
+            strncat(temp, "/", PATH_MAX - strlen(temp) - 1); // 仅在非最后一个目录后加 /
+        }
     }
     strncpy(cur_v_path, temp, PATH_MAX);
-    cur_v_path[PATH_MAX - 1] = '\0'; // 确保路径以 null 结尾
+    cur_v_path[PATH_MAX - 1] = '\0';
 
-    return 0; // 返回成功
+    return 0;
 }
 
 /**
@@ -96,7 +96,7 @@ int stack_clear() {
         free(thread_path_stack.dir[thread_path_stack.top]);
         thread_path_stack.dir[thread_path_stack.top--] = NULL;
     }
-    current_pwd_id = 0; // 重置目录 ID 为根目录
+    current_pwd_id = 1; // 重置目录 ID 为根目录
     strcpy(cur_v_path, "/"); // 重置路径为根目录
     return 0; // 返回成功
 }
@@ -137,37 +137,26 @@ int dir_cd(MYSQL *mysql, const char *path, char *response, size_t res_size) {
         printf("[调试] 处理路径段：'%s'\n", token);
 
         if (strcmp(token, "..") == 0) {
-            printf("[调试] 尝试退回上级目录。\n");
-            if (stack_pop(mysql) == 0) {
-                printf("[调试] 成功弹出目录栈，查询上级目录 ID。\n");
-
-                if (current_pwd_id == 0) {
-                    printf("[调试] 当前为根目录，无需更改。\n");
-                } else {
+            if (stack_pop() == 0) { // 移除 mysql 参数，确保函数签名一致
+                if (current_pwd_id != 1) {
                     char sql_parent[1024];
                     snprintf(sql_parent, sizeof(sql_parent),
-                             "SELECT parent_id FROM file_info WHERE id = %d AND hash IS NULL AND type = 1",
+                             "SELECT parent_id FROM file_info WHERE id = %d",
                              current_pwd_id);
-                    printf("[调试] 执行 SQL 查询上级目录：%s\n", sql_parent);
-
                     MYSQL_RES *res_parent = NULL;
                     if (db_query(mysql, sql_parent, &res_parent) != SUCCESS || !res_parent || mysql_num_rows(res_parent) == 0) {
-                        snprintf(response, res_size, "cd: 内部错误 - 无法找到父目录 ID。\n");
-                        printf("[错误] 查询父目录失败。\n");
+                        snprintf(response, res_size, "cd: 内部错误 - 无法找到父目录。\n");
                         if (res_parent) mysql_free_result(res_parent);
-                        stack_clear();
                         return FAILURE;
                     }
                     MYSQL_ROW row_parent = mysql_fetch_row(res_parent);
                     current_pwd_id = atoi(row_parent[0]);
                     mysql_free_result(res_parent);
-                    printf("[调试] 当前目录 ID 更新为：%d\n", current_pwd_id);
                 }
             } else {
-                current_pwd_id = 0;
+                current_pwd_id = 1; // 栈为空，重置为根目录
                 printf("[调试] 目录栈已空，重置为根目录。\n");
             }
-
         } else if (strcmp(token, ".") == 0) {
             printf("[调试] 遇到 '.'，保持在当前目录。\n");
         } else {
@@ -219,7 +208,7 @@ int dir_cd(MYSQL *mysql, const char *path, char *response, size_t res_size) {
         token = strtok(NULL, "/");
     }
 
-    snprintf(response, res_size, "当前目录：%s （ID : %d）\n", cur_v_path, current_pwd_id);
+    snprintf(response, res_size, "%s", cur_v_path); // 仅返回路径，例如 "/nihao" 或 "/"
     printf("[调试] 路径切换完成，当前目录为 %s，ID 为 %d\n", cur_v_path, current_pwd_id);
     return SUCCESS;
 }

@@ -1,14 +1,13 @@
 #include "thread_pool.h"
+
+extern MYSQL *mysql;
+
 void set_nonblock(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
-
-
-
 void *thread_func(void *arg) {
     thread_pool_t *thread_pool = (thread_pool_t *)arg;
-    int netfd;
     while (1) {
         printf("thread working\n");
         pthread_mutex_lock(&thread_pool->mutex);
@@ -20,38 +19,19 @@ void *thread_func(void *arg) {
             pthread_mutex_unlock(&thread_pool->mutex);
             pthread_exit(NULL);
         }
-        netfd = thread_pool->task_queue.front->netfd;
-        printf("thread get netfd = %d\n", netfd);
+        // 直接使用任务中的 netfd，而不是调用 accept
+        printf("子线程开始处理任务\n");
+// 获取任务并从队列中移除
+        int netfd = thread_pool->task_queue.front->long_command.netfd;
+        tlv_packet_t long_tlv_packet = thread_pool->task_queue.front->long_command.tlv_packet;
+        client_state_t* state = thread_pool->task_queue.front->long_command.state;
         de_queue(&thread_pool->task_queue);
         pthread_mutex_unlock(&thread_pool->mutex);
+        long_solve_command(netfd, &long_tlv_packet, mysql, state);
+        printf("命令处理结束\n");
 
-        // connect MYSQL
-        MYSQL *mysql = mysql_init(NULL);
-        int db_connect = db_init(mysql);
-        if (db_connect == 0) {
-            printf("数据库连接成功\n");
-        } else {
-            printf("数据库连接失败\n");
-            return NULL;
-        }
-        // solve command
-        while (1) {
-            // TODO tlv_packet free 在断开连接时候
-            tlv_packet_t *tlv_packet = (tlv_packet_t *)malloc(TLV_SIZE);
-            int recv_result = recv_tlv(netfd, tlv_packet);
-            if (recv_result < 0) {
-                // 连接已关闭或出错
-                printf("连接关闭\n");
-                free(tlv_packet);
-                break;
-            }
-            solve_command(netfd, tlv_packet, mysql);
-            printf("命令处理结束\n");
-            free(tlv_packet);
-        }
-        // 关闭连接并清理资源
+        // 关闭连接
         close(netfd);
-        db_close(mysql);
     }
     return NULL;
 }
@@ -60,4 +40,5 @@ int make_worker(thread_pool_t *thread_pool) {
     for (int i = 0; i < thread_pool->tid_arr.worker_num; ++i) {
         pthread_create(&thread_pool->tid_arr.arr[i], NULL, thread_func, thread_pool);
     }
+    return 0;
 }
